@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="de-CH">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f5c43">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Jass-Rechner">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}img{max-width:100%}[hidden]{display:none!important}</style>
+<script>
+if ('serviceWorker' in navigator) {
+  addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+    if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+  });
+}
+</script>
+<title>Jass-Rechner</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: Handy zuerst, drei Reiter unten; ab 900px Erfassen und Rangliste nebeneinander.
+   Keine externen Schriften oder Skripte, damit die App auch ohne Netz in der Beiz startet. */
+:root {
+  --bg: #e9ede7; --surface: #fbfcf9; --sunken: #dfe5dd; --line: #c9d2c7;
+  --fg: #1a221c; --muted: #566259;
+  --felt: #1f5c43; --felt-fg: #f4f8f5; --red: #a3231f;
+  --slate: #232b2a; --chalk: #f1f3ea; --chalk-dim: #aab4ab;
+  --gold: #c8981c; --gold-ink: #2d2103; --gold-soft: #f4e8c8; --gold-fg: #5a4205;
+  --display: Rockwell, "Roboto Slab", "DejaVu Serif", Georgia, serif;
+  --body: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111614; --surface: #1a221f; --sunken: #242e2a; --line: #36423c;
+    --fg: #e8ece8; --muted: #9ba89f;
+    --felt: #2c7a5a; --felt-fg: #f4f8f5; --red: #ea7a73;
+    --slate: #0b0f0e; --chalk: #f1f3ea; --chalk-dim: #98a399;
+    --gold: #dcae3a; --gold-ink: #2d2103; --gold-soft: #2e2710; --gold-fg: #f0d994;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111614; --surface: #1a221f; --sunken: #242e2a; --line: #36423c;
+  --fg: #e8ece8; --muted: #9ba89f;
+  --felt: #2c7a5a; --felt-fg: #f4f8f5; --red: #ea7a73;
+  --slate: #0b0f0e; --chalk: #f1f3ea; --chalk-dim: #98a399;
+  --gold: #dcae3a; --gold-ink: #2d2103; --gold-soft: #2e2710; --gold-fg: #f0d994;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font: 16px/1.4 var(--body);
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+}
+button, input, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+h1, h2, p { margin: 0; }
+ol, ul { margin: 0; padding: 0; list-style: none; }
+
+.app {
+  max-width: 520px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 16px calc(96px + env(safe-area-inset-bottom, 0px));
+}
+.view { display: none; }
+.view.on { display: grid; gap: 14px; align-content: start; }
+
+.label {
+  display: block; font-size: 12px; font-weight: 600; color: var(--muted);
+  letter-spacing: .07em; text-transform: uppercase;
+}
+.hint { font-size: 14px; color: var(--muted); }
+
+/* Kopf mit Anlass */
+.kopf { display: grid; gap: 2px; }
+.kopf input {
+  width: 100%; padding: 0; border: 0; background: none;
+  font: 700 26px/1.2 var(--display); letter-spacing: -.01em;
+}
+.kopf input::placeholder { color: var(--fg); opacity: 1; }
+.kopf input:focus { outline: none; border-bottom: 2px solid var(--felt); }
+
+/* Standblatt */
+.blatt { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
+.feld { display: grid; gap: 4px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.feld input { width: 100%; padding: 2px 0; border: 0; background: none; font-size: 19px; font-weight: 600; }
+.feld input:focus { outline: none; }
+.feld:focus-within { box-shadow: inset 0 0 0 2px var(--felt); }
+.feld input::placeholder, .pass input::placeholder { color: var(--muted); opacity: .55; font-weight: 400; }
+.pass { display: grid; grid-template-columns: 72px 1fr; align-items: stretch; border-bottom: 1px solid var(--line); }
+.pass label {
+  display: flex; align-items: center; justify-content: center; gap: 5px;
+  background: var(--sunken); font-size: 12px; color: var(--muted);
+  border-right: 1px solid var(--line);
+}
+.pass label b { font: 700 20px var(--display); color: var(--fg); }
+.pass input {
+  width: 100%; min-width: 0; padding: 11px 14px; border: 0; background: none; text-align: right;
+  font: 700 26px var(--display); font-variant-numeric: tabular-nums;
+}
+.pass input:focus { outline: none; box-shadow: inset 0 0 0 2px var(--felt); }
+
+/* Jasstafel mit dem Kreide-Z */
+.tafel {
+  position: relative; overflow: hidden; display: flex; justify-content: space-between; align-items: center;
+  gap: 12px; padding: 12px 16px; background: var(--slate); color: var(--chalk); border-radius: 0 0 5px 5px;
+}
+.tafel svg { position: absolute; inset: 6px 0; width: 100%; height: calc(100% - 12px); opacity: .13; pointer-events: none; }
+.tafel > div { position: relative; }
+.tafel .label { color: var(--chalk-dim); }
+.tafel small { display: block; font-size: 13px; color: var(--chalk-dim); }
+.tafel output { position: relative; font: 700 40px/1.1 var(--display); font-variant-numeric: tabular-nums; }
+
+.knoepfe { display: grid; grid-template-columns: 1fr 2fr; gap: 8px; }
+.knoepfe.gleich { grid-template-columns: 1fr 1fr; }
+.btn {
+  min-height: 48px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--surface); font-weight: 600; font-size: 15px;
+}
+.btn:active { background: var(--sunken); }
+.btn.haupt { background: var(--felt); border-color: var(--felt); color: var(--felt-fg); }
+.btn.haupt:active { filter: brightness(.88); }
+.btn.haupt:disabled { background: var(--sunken); border-color: var(--line); color: var(--muted); cursor: not-allowed; }
+.btn.gefahr { color: var(--red); }
+.textbtn { justify-self: center; min-height: 44px; padding: 8px 12px; border: 0; background: none; color: var(--muted); font-size: 14px; text-decoration: underline; }
+
+.notiz { padding: 10px 12px; border-radius: 6px; background: var(--gold-soft); color: var(--gold-fg); font-size: 14px; }
+.warnung { margin-bottom: 14px; }
+
+/* Rangliste */
+.titel { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.titel h2 { font: 700 22px var(--display); }
+.sieger { padding: 14px 16px; background: var(--gold-soft); border: 1px solid var(--gold); border-radius: 6px; color: var(--gold-fg); }
+.sieger strong { display: block; color: var(--fg); font: 700 24px/1.2 var(--display); overflow-wrap: anywhere; }
+.kennzahlen { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.kennzahlen div { min-width: 0; }
+.kennzahlen b { display: block; font: 700 19px var(--display); font-variant-numeric: tabular-nums; }
+.kennzahlen small { display: block; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+
+.liste { display: grid; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
+.zeile { display: grid; grid-template-columns: auto minmax(0, 1fr) auto 40px; align-items: center; gap: 6px; padding: 4px 4px 4px 10px; border-bottom: 1px solid var(--line); }
+.zeile:last-child { border-bottom: 0; }
+.rang {
+  width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%;
+  background: var(--sunken); font-weight: 700; font-size: 14px; font-variant-numeric: tabular-nums;
+}
+.rang.r1 { background: var(--gold); color: var(--gold-ink); }
+.zeile-text { min-width: 0; min-height: 48px; padding: 5px 6px; display: block; text-align: left; border: 0; background: none; }
+.zeile-text b { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.zeile-text small { display: block; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.zeile-total { text-align: right; }
+.zeile-total b { display: block; font: 700 20px/1.1 var(--display); font-variant-numeric: tabular-nums; }
+.zeile-total small { display: block; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.weg { width: 40px; height: 44px; display: grid; place-items: center; border: 0; background: none; color: var(--muted); border-radius: 6px; }
+.weg:active { color: var(--red); }
+.weg svg { width: 18px; height: 18px; }
+.leer { padding: 28px 18px; text-align: center; border: 1px dashed var(--line); border-radius: 6px; color: var(--muted); }
+.leer b { display: block; color: var(--fg); margin-bottom: 4px; }
+
+/* Abende */
+details.abend { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
+details.abend summary { padding: 12px 14px; cursor: pointer; }
+details.abend summary b { font-family: var(--display); font-size: 17px; }
+details.abend summary small { display: block; color: var(--muted); font-size: 13px; }
+.abend-inhalt { display: grid; gap: 10px; padding: 0 14px 14px; }
+.abend-liste li { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 6px; padding: 5px 0; border-top: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.abend-liste span:nth-child(2) { overflow-wrap: anywhere; }
+.abend-liste b { font-family: var(--display); }
+.drei { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.drei .btn { padding-inline: 4px; font-size: 14px; }
+.scroll { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+th, td { padding: 8px 6px; font-size: 15px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+th { font-size: 12px; color: var(--muted); font-weight: 600; }
+th:first-child, td:first-child { text-align: left; white-space: normal; }
+.block { display: grid; gap: 8px; }
+.block h2 { font: 700 18px var(--display); }
+
+/* Reiter */
+nav {
+  position: fixed; inset: auto 0 0; z-index: 5; display: flex; justify-content: center;
+  background: var(--surface); border-top: 1px solid var(--line);
+  padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+nav button {
+  flex: 1; max-width: 174px; min-height: 58px; display: flex; align-items: center; justify-content: center; gap: 6px;
+  border: 0; border-top: 3px solid transparent; background: none; color: var(--muted); font-weight: 600; font-size: 15px;
+}
+nav button[aria-current="page"] { color: var(--fg); border-top-color: var(--felt); }
+.zahl { min-width: 22px; padding: 1px 6px; border-radius: 11px; background: var(--sunken); color: var(--fg); font-size: 12px; font-variant-numeric: tabular-nums; }
+
+/* Meldung mit Rückgängig */
+.toast {
+  position: fixed; z-index: 6; left: 50%; bottom: calc(70px + env(safe-area-inset-bottom, 0px));
+  width: min(488px, calc(100% - 32px)); transform: translateX(-50%);
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 8px 8px 8px 14px; border-radius: 6px; background: var(--slate); color: var(--chalk); font-size: 15px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .3);
+}
+.toast button { flex: none; min-height: 40px; padding: 6px 10px; border: 0; background: none; color: var(--gold); font-weight: 700; }
+
+dialog {
+  width: min(460px, calc(100% - 32px)); padding: 18px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--surface); color: var(--fg);
+}
+dialog::backdrop { background: rgba(0, 0, 0, .55); }
+dialog h2 { font: 700 20px var(--display); margin-bottom: 6px; }
+dialog p { color: var(--muted); margin-bottom: 12px; }
+dialog textarea { width: 100%; height: 170px; margin-bottom: 12px; padding: 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); font-size: 14px; }
+dialog .fehler { color: var(--red); font-weight: 600; }
+
+@media (min-width: 900px) {
+  .app { max-width: 980px; display: grid; grid-template-columns: 1fr 1fr; gap: 28px; align-items: start; }
+  .warnung { grid-column: 1 / -1; margin-bottom: 0; }
+  #v-erfassen { display: grid; gap: 14px; }
+  body[data-tab="erfassen"] #v-rangliste { display: grid; }
+  nav button[data-tab="erfassen"] { display: none; }
+}
+</style>
+
+<div class="app">
+  <div id="warnung" class="notiz warnung" hidden>Dieser Browser blockiert das Speichern. Die Einträge gehen beim Schliessen verloren. Nutze unter «Abende» das Backup.</div>
+
+  <section id="v-erfassen" class="view">
+    <div class="kopf">
+      <span class="label" id="datum"></span>
+      <input id="anlass" type="text" maxlength="60" placeholder="Jassabend" aria-label="Name des Anlasses" autocomplete="off">
+    </div>
+    <div id="editHinweis" class="notiz" hidden></div>
+    <form class="blatt" id="formular" autocomplete="off">
+      <div class="feld">
+        <label class="label" for="spielerName">Spielername</label>
+        <input id="spielerName" type="text" maxlength="40" list="namen" placeholder="z.B. Hans (optional)" enterkeyhint="next">
+        <datalist id="namen"></datalist>
+      </div>
+      <div id="passen"></div>
+      <div class="tafel">
+        <svg viewBox="0 0 120 60" preserveAspectRatio="none" aria-hidden="true"><path d="M8 7 H112 L8 53 H112" fill="none" stroke="currentColor" stroke-width="3" vector-effect="non-scaling-stroke"/></svg>
+        <div><span class="label">Total</span><small id="fortschritt"></small></div>
+        <output id="summe" for="passen">0</output>
+      </div>
+    </form>
+    <div id="doppelt" class="notiz" hidden></div>
+    <div class="knoepfe">
+      <button id="btnReset" class="btn" type="button">Leeren</button>
+      <button id="btnSpeichern" class="btn haupt" type="button" disabled>In Rangliste eintragen</button>
+    </div>
+  </section>
+
+  <section id="v-rangliste" class="view"></section>
+  <section id="v-abende" class="view"></section>
+</div>
+
+<nav aria-label="Bereiche">
+  <button type="button" data-tab="erfassen">Erfassen</button>
+  <button type="button" data-tab="rangliste">Rangliste <span class="zahl" id="zahlRang">0</span></button>
+  <button type="button" data-tab="abende">Abende <span class="zahl" id="zahlAbende">0</span></button>
+</nav>
+
+<div id="toast" class="toast" role="status" hidden><span id="toastText"></span><button id="toastUndo" type="button">Rückgängig</button></div>
+<dialog id="sheet"></dialog>
+
+<script>
+'use strict';
+document.documentElement.lang = 'de-CH';
+
+const KEY = 'jassRechner_v2', ALT_KEY = 'jassRechner_v1', PASSEN = 4;
+const $ = (id) => document.getElementById(id);
+const fmt = (n) => Number(n).toLocaleString('de-CH');
+const e = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+let idZaehler = 0;
+const neueId = () => Date.now() * 1000 + (idZaehler++ % 1000);
+
+function heute() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+const datumText = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString('de-CH', { day: 'numeric', month: 'long', year: 'numeric' });
+const abendName = (a) => a.name || 'Jassabend';
+const neuerAbend = () => ({ id: neueId(), name: '', datum: heute(), eintraege: [] });
+
+function gueltigerEintrag(s) {
+  return s && typeof s.name === 'string' && Array.isArray(s.passen) && s.passen.length === PASSEN &&
+    s.passen.every((p) => Number.isFinite(p) && p >= 0);
+}
+function gueltigerAbend(a) {
+  return a && typeof a.datum === 'string' && Array.isArray(a.eintraege) && a.eintraege.every(gueltigerEintrag);
+}
+function gueltigeDaten(d) {
+  return d && gueltigerAbend(d.aktiv) && Array.isArray(d.archiv) && d.archiv.every(gueltigerAbend);
+}
+
+function laden() {
+  const leer = { aktiv: neuerAbend(), archiv: [], tab: 'erfassen', entwurf: null };
+  try {
+    const roh = localStorage.getItem(KEY);
+    if (roh) {
+      const d = JSON.parse(roh);
+      if (gueltigeDaten(d)) return { ...leer, ...d };
+    }
+    // Einträge der ersten Version übernehmen
+    const alt = JSON.parse(localStorage.getItem(ALT_KEY) || 'null');
+    if (Array.isArray(alt)) leer.aktiv.eintraege = alt.filter(gueltigerEintrag);
+  } catch (err) { /* startet leer */ }
+  return leer;
+}
+
+const state = laden();
+if (!state.aktiv.eintraege.length) state.aktiv.datum = heute();
+let editId = null;
+
+function sichern() {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(state));
+    $('warnung').hidden = true;
+  } catch (err) {
+    $('warnung').hidden = false;
+  }
+}
+
+/* Gleiche Punktzahl ergibt den gleichen Rang (1, 2, 2, 4). */
+function rangieren(eintraege) {
+  const sortiert = [...eintraege].sort((a, b) => b.summe - a.summe);
+  let rang = 0;
+  return sortiert.map((s, i) => {
+    if (i === 0 || s.summe !== sortiert[i - 1].summe) rang = i + 1;
+    return { ...s, rang };
+  });
+}
+const sieger = (eintraege) => rangieren(eintraege).filter((s) => s.rang === 1);
+const namenListe = (liste) => {
+  const n = liste.map((s) => s.name);
+  return n.length < 2 ? n.join('') : `${n.slice(0, -1).join(', ')} und ${n[n.length - 1]}`;
+};
+
+/* ---------- Rückgängig ---------- */
+let undoStand = null, toastTimer = null;
+function merken() { undoStand = JSON.stringify({ aktiv: state.aktiv, archiv: state.archiv }); }
+function melden(text, mitUndo = true) {
+  $('toastText').textContent = text;
+  $('toastUndo').hidden = !mitUndo;
+  $('toast').hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { $('toast').hidden = true; }, mitUndo ? 7000 : 3500);
+}
+$('toastUndo').addEventListener('click', () => {
+  if (!undoStand) return;
+  Object.assign(state, JSON.parse(undoStand));
+  undoStand = null;
+  if (editId && !state.aktiv.eintraege.some((s) => s.id === editId)) formularLeeren();
+  $('toast').hidden = true;
+  sichern();
+  allesZeichnen();
+});
+
+/* ---------- Dialog ---------- */
+function dialog({ titel, text = '', feld = null, aktionen }) {
+  const d = $('sheet');
+  d.innerHTML = `<h2>${e(titel)}</h2>${text ? `<p>${e(text)}</p>` : ''}
+    ${feld ? `<textarea id="sheetFeld" aria-label="${e(titel)}" ${feld.nurLesen ? 'readonly' : ''}></textarea>` : ''}
+    <div class="knoepfe gleich">${aktionen.map((a, i) => `<button type="button" class="btn ${a.art || ''}" data-i="${i}">${e(a.label)}</button>`).join('')}</div>`;
+  const ta = d.querySelector('textarea');
+  if (ta && feld.wert) ta.value = feld.wert;
+  d.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
+    const fn = aktionen[Number(b.dataset.i)].fn;
+    if (fn && fn(ta ? ta.value : '') === false) return;
+    d.close();
+  }));
+  if (d.showModal) d.showModal(); else d.setAttribute('open', '');
+  if (ta && feld.nurLesen) ta.select();
+}
+
+function kopieren(text, erfolg) {
+  const manuell = () => dialog({
+    titel: 'Text kopieren', text: 'Das automatische Kopieren ist hier gesperrt. Der Text ist markiert, kopiere ihn von Hand.',
+    feld: { wert: text, nurLesen: true }, aktionen: [{ label: 'Schliessen' }],
+  });
+  if (!navigator.clipboard) return manuell();
+  navigator.clipboard.writeText(text).then(() => melden(erfolg, false)).catch(manuell);
+}
+
+/* ---------- Formular ---------- */
+const passenBox = $('passen');
+passenBox.innerHTML = Array.from({ length: PASSEN }, (_, i) => `
+  <div class="pass">
+    <label for="passe${i}">Pass <b>${i + 1}</b></label>
+    <input id="passe${i}" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="Resultat" enterkeyhint="${i < PASSEN - 1 ? 'next' : 'done'}" aria-label="Resultat Pass ${i + 1}">
+  </div>`).join('');
+const passeInputs = Array.from({ length: PASSEN }, (_, i) => $(`passe${i}`));
+const nameEl = $('spielerName');
+
+passeInputs.forEach((el, i) => {
+  el.addEventListener('input', () => {
+    el.value = el.value.replace(/[^0-9]/g, '');
+    formularAktualisieren();
+  });
+  el.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Enter') return;
+    ev.preventDefault();
+    if (i < PASSEN - 1) passeInputs[i + 1].focus();
+    else if (!$('btnSpeichern').disabled) speichern();
+    else el.blur();
+  });
+});
+nameEl.addEventListener('input', formularAktualisieren);
+nameEl.addEventListener('keydown', (ev) => {
+  if (ev.key === 'Enter') { ev.preventDefault(); passeInputs[0].focus(); }
+});
+$('formular').addEventListener('submit', (ev) => ev.preventDefault());
+$('anlass').addEventListener('input', () => {
+  state.aktiv.name = $('anlass').value.trim();
+  sichern();
+});
+
+function formularAktualisieren() {
+  const werte = passeInputs.map((el) => el.value.trim());
+  const erfasst = werte.filter((w) => w !== '').length;
+  const summe = werte.reduce((acc, w) => acc + (parseInt(w, 10) || 0), 0);
+  $('summe').textContent = fmt(summe);
+  $('fortschritt').textContent = `${erfasst} von ${PASSEN} Passen`;
+  $('btnSpeichern').disabled = erfasst < PASSEN;
+
+  const name = nameEl.value.trim().toLowerCase();
+  const gleich = name && state.aktiv.eintraege.find((s) => s.id !== editId && s.name.toLowerCase() === name);
+  $('doppelt').hidden = !gleich;
+  if (gleich) $('doppelt').textContent = `${gleich.name} steht schon mit ${fmt(gleich.summe)} Punkten in der Rangliste. Tippe dort auf den Namen, um den Eintrag zu ändern.`;
+
+  state.entwurf = editId ? null : { name: nameEl.value, passen: passeInputs.map((el) => el.value) };
+  sichern();
+}
+
+function formularLeeren() {
+  editId = null;
+  nameEl.value = '';
+  passeInputs.forEach((el) => { el.value = ''; });
+  $('editHinweis').hidden = true;
+  $('btnReset').textContent = 'Leeren';
+  $('btnSpeichern').textContent = 'In Rangliste eintragen';
+  formularAktualisieren();
+}
+
+function freierName() {
+  let n = state.aktiv.eintraege.length + 1;
+  while (state.aktiv.eintraege.some((s) => s.name === `Spieler ${n}`)) n++;
+  return `Spieler ${n}`;
+}
+
+function speichern() {
+  if (passeInputs.some((el) => el.value.trim() === '')) return;
+  merken();
+  const passen = passeInputs.map((el) => parseInt(el.value, 10) || 0);
+  const summe = passen.reduce((a, b) => a + b, 0);
+  const name = nameEl.value.trim() || (editId ? state.aktiv.eintraege.find((s) => s.id === editId).name : freierName());
+  let id = editId;
+  if (editId) {
+    Object.assign(state.aktiv.eintraege.find((s) => s.id === editId), { name, passen, summe });
+  } else {
+    id = neueId();
+    state.aktiv.eintraege.push({ id, name, passen, summe });
+  }
+  const r = rangieren(state.aktiv.eintraege);
+  formularLeeren();
+  sichern();
+  allesZeichnen();
+  melden(`${name}: ${fmt(summe)} Punkte, Rang ${r.find((s) => s.id === id).rang} von ${r.length}`);
+  nameEl.focus();
+}
+
+function bearbeiten(id) {
+  const s = state.aktiv.eintraege.find((x) => x.id === id);
+  if (!s) return;
+  editId = id;
+  nameEl.value = s.name;
+  passeInputs.forEach((el, i) => { el.value = s.passen[i]; });
+  $('editHinweis').hidden = false;
+  $('editHinweis').textContent = `Du änderst den Eintrag von ${s.name}.`;
+  $('btnReset').textContent = 'Abbrechen';
+  $('btnSpeichern').textContent = 'Änderung speichern';
+  zeigeTab('erfassen');
+  formularAktualisieren();
+  passeInputs[0].focus();
+}
+
+$('btnSpeichern').addEventListener('click', speichern);
+$('btnReset').addEventListener('click', () => { formularLeeren(); nameEl.focus(); });
+
+/* ---------- Aktionen ---------- */
+function loeschen(id) {
+  const s = state.aktiv.eintraege.find((x) => x.id === id);
+  if (!s) return;
+  merken();
+  state.aktiv.eintraege = state.aktiv.eintraege.filter((x) => x.id !== id);
+  if (editId === id) formularLeeren();
+  sichern();
+  allesZeichnen();
+  melden(`${s.name} gelöscht`);
+}
+
+function abendText(a) {
+  const zeilen = rangieren(a.eintraege).map((s) => `${s.rang}. ${s.name}: ${fmt(s.summe)} (${s.passen.map(fmt).join(' / ')})`);
+  return `${abendName(a)}, ${datumText(a.datum)}\n\n${zeilen.join('\n')}`;
+}
+
+function abschliessen() {
+  const a = state.aktiv;
+  dialog({
+    titel: 'Abend abschliessen?',
+    text: `Die Rangliste mit ${a.eintraege.length} ${a.eintraege.length === 1 ? 'Eintrag' : 'Einträgen'} kommt ins Archiv unter «Abende». Danach beginnt ein neuer Abend.`,
+    aktionen: [
+      { label: 'Abbrechen' },
+      { label: 'Abschliessen', art: 'haupt', fn: () => {
+        merken();
+        state.archiv.unshift(a);
+        state.aktiv = neuerAbend();
+        formularLeeren();
+        sichern();
+        zeigeTab('abende');
+        allesZeichnen();
+        melden(`${abendName(a)} archiviert`);
+      } },
+    ],
+  });
+}
+
+function alleLoeschen() {
+  dialog({
+    titel: 'Alle Einträge löschen?',
+    text: 'Die Rangliste dieses Abends wird geleert.',
+    aktionen: [
+      { label: 'Abbrechen' },
+      { label: 'Alle löschen', art: 'gefahr', fn: () => {
+        merken();
+        state.aktiv.eintraege = [];
+        formularLeeren();
+        sichern();
+        allesZeichnen();
+        melden('Rangliste geleert');
+      } },
+    ],
+  });
+}
+
+function wiederOeffnen(id) {
+  const a = state.archiv.find((x) => x.id === id);
+  if (!a) return;
+  merken();
+  const laufend = state.aktiv;
+  state.archiv = state.archiv.filter((x) => x.id !== id);
+  if (laufend.eintraege.length) state.archiv.unshift(laufend);
+  state.aktiv = a;
+  formularLeeren();
+  sichern();
+  zeigeTab('rangliste');
+  allesZeichnen();
+  melden(laufend.eintraege.length ? `${abendName(a)} geöffnet, der laufende Abend ist archiviert` : `${abendName(a)} geöffnet`);
+}
+
+function abendLoeschen(id) {
+  const a = state.archiv.find((x) => x.id === id);
+  if (!a) return;
+  merken();
+  state.archiv = state.archiv.filter((x) => x.id !== id);
+  sichern();
+  allesZeichnen();
+  melden(`${abendName(a)} gelöscht`);
+}
+
+function backupEinlesen() {
+  dialog({
+    titel: 'Backup einlesen',
+    text: 'Füge den kopierten Backup-Text ein. Er ersetzt die Daten auf diesem Gerät.',
+    feld: { wert: '' },
+    aktionen: [
+      { label: 'Abbrechen' },
+      { label: 'Einlesen', art: 'haupt', fn: (wert) => {
+        let d = null;
+        try { d = JSON.parse(wert); } catch (err) { d = null; }
+        if (!gueltigeDaten(d)) {
+          const p = $('sheet').querySelector('p');
+          p.textContent = 'Das ist kein gültiger Backup-Text. Kopiere ihn nochmals vollständig.';
+          p.className = 'fehler';
+          return false;
+        }
+        merken();
+        state.aktiv = d.aktiv;
+        state.archiv = d.archiv;
+        formularLeeren();
+        sichern();
+        allesZeichnen();
+        melden('Backup eingelesen');
+      } },
+    ],
+  });
+}
+
+/* ---------- Darstellung ---------- */
+const ICON_WEG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v5M14 11v5"/></svg>';
+
+function zeichneRangliste() {
+  const a = state.aktiv;
+  const box = $('v-rangliste');
+  if (!a.eintraege.length) {
+    box.innerHTML = `<div class="titel"><h2>Rangliste</h2></div>
+      <div class="leer"><b>Noch niemand eingetragen</b>Sobald du die 4 Passen eines Spielers erfasst hast, erscheint er hier mit Rang und Total.</div>`;
+    return;
+  }
+  const r = rangieren(a.eintraege);
+  const erster = sieger(a.eintraege);
+  const schnitt = Math.round(a.eintraege.reduce((acc, s) => acc + s.summe, 0) / a.eintraege.length);
+  const beste = Math.max(...a.eintraege.flatMap((s) => s.passen));
+  const besteVon = a.eintraege.filter((s) => s.passen.includes(beste));
+  box.innerHTML = `
+    <div class="titel"><h2>Rangliste</h2><span class="hint">${a.eintraege.length} Spieler</span></div>
+    ${a.eintraege.length >= 2 ? `<div class="sieger"><span class="label" style="color:inherit">${erster.length > 1 ? 'Punktgleich vorne' : 'Tagessieger'}</span>
+      <strong>${e(namenListe(erster))}</strong>${fmt(erster[0].summe)} Punkte</div>
+      <div class="kennzahlen">
+        <div><b>${fmt(schnitt)}</b><small>Schnitt pro Spieler</small></div>
+        <div><b>${fmt(beste)}</b><small>Beste Passe: ${e(namenListe(besteVon))}</small></div>
+        <div><b>${fmt(erster[0].summe - r[r.length - 1].summe)}</b><small>Abstand Erster zu Letztem</small></div>
+      </div>` : ''}
+    <ol class="liste">${r.map((s) => `
+      <li class="zeile">
+        <span class="rang ${s.rang === 1 ? 'r1' : ''}">${s.rang}</span>
+        <button type="button" class="zeile-text" data-edit="${s.id}" aria-label="${e(s.name)} bearbeiten">
+          <b>${e(s.name)}</b><small>${s.passen.map(fmt).join(' · ')}</small>
+        </button>
+        <span class="zeile-total"><b>${fmt(s.summe)}</b>${s.rang > 1 ? `<small>−${fmt(erster[0].summe - s.summe)}</small>` : ''}</span>
+        <button type="button" class="weg" data-del="${s.id}" aria-label="${e(s.name)} löschen">${ICON_WEG}</button>
+      </li>`).join('')}</ol>
+    <p class="hint">Tippe auf einen Namen, um den Eintrag zu ändern.</p>
+    <div class="knoepfe gleich">
+      <button type="button" class="btn" id="btnKopieren">Rangliste kopieren</button>
+      <button type="button" class="btn haupt" id="btnAbschliessen">Abend abschliessen</button>
+    </div>
+    <button type="button" class="textbtn" id="btnAlleLoeschen">Alle Einträge löschen</button>`;
+  $('btnKopieren').addEventListener('click', () => kopieren(abendText(a), 'Rangliste kopiert'));
+  $('btnAbschliessen').addEventListener('click', abschliessen);
+  $('btnAlleLoeschen').addEventListener('click', alleLoeschen);
+}
+
+function bilanz() {
+  const m = new Map();
+  state.archiv.forEach((a) => {
+    const siegerIds = sieger(a.eintraege).map((s) => s.id);
+    a.eintraege.forEach((s) => {
+      const k = s.name.trim().toLowerCase();
+      const b = m.get(k) || { name: s.name, abende: 0, siege: 0, punkte: 0, best: 0 };
+      b.abende++;
+      b.punkte += s.summe;
+      b.best = Math.max(b.best, s.summe);
+      if (siegerIds.includes(s.id)) b.siege++;
+      m.set(k, b);
+    });
+  });
+  return [...m.values()].sort((x, y) => y.siege - x.siege || y.punkte / y.abende - x.punkte / x.abende);
+}
+
+function zeichneAbende() {
+  const box = $('v-abende');
+  const b = bilanz();
+  box.innerHTML = `
+    <div class="titel"><h2>Abende</h2><span class="hint">${state.archiv.length} abgeschlossen</span></div>
+    ${state.archiv.length ? state.archiv.map((a) => {
+      const erster = sieger(a.eintraege);
+      return `<details class="abend">
+        <summary><b>${e(abendName(a))}</b><small>${datumText(a.datum)} · ${a.eintraege.length} Spieler${erster.length ? ` · Sieg: ${e(namenListe(erster))}` : ''}</small></summary>
+        <div class="abend-inhalt">
+          <ol class="abend-liste">${rangieren(a.eintraege).map((s) => `<li><span>${s.rang}.</span><span>${e(s.name)}</span><b>${fmt(s.summe)}</b></li>`).join('')}</ol>
+          <div class="drei">
+            <button type="button" class="btn" data-copy="${a.id}">Kopieren</button>
+            <button type="button" class="btn" data-open="${a.id}">Öffnen</button>
+            <button type="button" class="btn gefahr" data-delabend="${a.id}">Löschen</button>
+          </div>
+        </div>
+      </details>`;
+    }).join('') : '<div class="leer"><b>Noch kein Abend archiviert</b>Schliesse in der Rangliste einen Abend ab, dann erscheint er hier mit Sieger und Resultaten.</div>'}
+    ${b.length ? `<div class="block"><h2>Bilanz aller Abende</h2>
+      <div class="scroll"><table>
+        <thead><tr><th scope="col">Name</th><th scope="col">Abende</th><th scope="col">Siege</th><th scope="col">Schnitt</th><th scope="col">Bestes</th></tr></thead>
+        <tbody>${b.map((x) => `<tr><td>${e(x.name)}</td><td>${x.abende}</td><td>${x.siege}</td><td>${fmt(Math.round(x.punkte / x.abende))}</td><td>${fmt(x.best)}</td></tr>`).join('')}</tbody>
+      </table></div></div>` : ''}
+    <div class="block"><h2>Datensicherung</h2>
+      <p class="hint">Alle Daten liegen nur in diesem Browser auf diesem Gerät. Kopiere das Backup in eine Notiz oder Mail, bevor du Browserdaten löschst oder das Gerät wechselst.</p>
+      <div class="knoepfe gleich">
+        <button type="button" class="btn" id="btnBackup">Backup kopieren</button>
+        <button type="button" class="btn" id="btnImport">Backup einlesen</button>
+      </div>
+    </div>`;
+  $('btnBackup').addEventListener('click', () => kopieren(JSON.stringify({ aktiv: state.aktiv, archiv: state.archiv }), 'Backup kopiert'));
+  $('btnImport').addEventListener('click', backupEinlesen);
+}
+
+function zeichneKopf() {
+  $('datum').textContent = datumText(state.aktiv.datum);
+  if (document.activeElement !== $('anlass')) $('anlass').value = state.aktiv.name;
+  $('zahlRang').textContent = state.aktiv.eintraege.length;
+  $('zahlAbende').textContent = state.archiv.length;
+  const namen = new Set();
+  [state.aktiv, ...state.archiv].forEach((a) => a.eintraege.forEach((s) => namen.add(s.name)));
+  $('namen').innerHTML = [...namen].sort((x, y) => x.localeCompare(y, 'de-CH')).map((n) => `<option value="${e(n)}"></option>`).join('');
+}
+
+function allesZeichnen() {
+  zeichneKopf();
+  zeichneRangliste();
+  zeichneAbende();
+}
+
+function zeigeTab(tab) {
+  state.tab = tab;
+  document.body.dataset.tab = tab;
+  document.querySelectorAll('.view').forEach((v) => v.classList.toggle('on', v.id === `v-${tab}`));
+  document.querySelectorAll('nav button').forEach((b) => {
+    if (b.dataset.tab === tab) b.setAttribute('aria-current', 'page');
+    else b.removeAttribute('aria-current');
+  });
+  sichern();
+  window.scrollTo(0, 0);
+}
+
+document.querySelector('nav').addEventListener('click', (ev) => {
+  const b = ev.target.closest('button[data-tab]');
+  if (b) zeigeTab(b.dataset.tab);
+});
+document.querySelector('.app').addEventListener('click', (ev) => {
+  const b = ev.target.closest('button');
+  if (!b) return;
+  if (b.dataset.edit) bearbeiten(Number(b.dataset.edit));
+  else if (b.dataset.del) loeschen(Number(b.dataset.del));
+  else if (b.dataset.open) wiederOeffnen(Number(b.dataset.open));
+  else if (b.dataset.delabend) abendLoeschen(Number(b.dataset.delabend));
+  else if (b.dataset.copy) {
+    const a = state.archiv.find((x) => x.id === Number(b.dataset.copy));
+    if (a) kopieren(abendText(a), 'Rangliste kopiert');
+  }
+});
+
+/* ---------- Start ---------- */
+if (state.entwurf) {
+  nameEl.value = state.entwurf.name || '';
+  passeInputs.forEach((el, i) => { el.value = (state.entwurf.passen && state.entwurf.passen[i]) || ''; });
+}
+zeigeTab(['erfassen', 'rangliste', 'abende'].includes(state.tab) ? state.tab : 'erfassen');
+formularAktualisieren();
+allesZeichnen();
+</script>
+
+</html>
