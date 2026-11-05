@@ -87,6 +87,10 @@ ol, ul { margin: 0; padding: 0; list-style: none; }
 }
 .kopf input::placeholder { color: var(--fg); opacity: 1; }
 .kopf input:focus { outline: none; border-bottom: 2px solid var(--felt); }
+.datum-wahl { position: relative; justify-self: start; display: inline-flex; align-items: center; gap: 6px; min-height: 32px; cursor: pointer; }
+.datum-wahl svg { width: 15px; height: 15px; color: var(--felt); }
+.kopf .datum-wahl input { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; opacity: 0; cursor: pointer; font-size: 16px; }
+.datum-wahl:focus-within { outline: 3px solid var(--gold); outline-offset: 2px; border-radius: 4px; }
 
 /* Standblatt */
 .blatt { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
@@ -233,7 +237,11 @@ dialog .fehler { color: var(--red); font-weight: 600; }
 
   <section id="v-erfassen" class="view">
     <div class="kopf">
-      <span class="label" id="datum"></span>
+      <label class="datum-wahl">
+        <span class="label" id="datum"></span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+        <input id="datumWahl" type="date" aria-label="Datum des Abends ändern">
+      </label>
       <input id="anlass" type="text" maxlength="60" placeholder="Jassabend" aria-label="Name des Anlasses" autocomplete="off">
     </div>
     <div id="editHinweis" class="notiz" hidden></div>
@@ -316,7 +324,7 @@ function laden() {
 }
 
 const state = laden();
-if (!state.aktiv.eintraege.length) state.aktiv.datum = heute();
+if (!state.aktiv.eintraege.length && !state.aktiv.datumGesetzt) state.aktiv.datum = heute();
 let editId = null;
 
 function sichern() {
@@ -420,6 +428,19 @@ $('formular').addEventListener('submit', (ev) => ev.preventDefault());
 $('anlass').addEventListener('input', () => {
   state.aktiv.name = $('anlass').value.trim();
   sichern();
+});
+$('datumWahl').addEventListener('click', () => {
+  try { $('datumWahl').showPicker(); } catch (err) { /* Browser öffnet den Kalender selbst */ }
+});
+$('datumWahl').addEventListener('change', () => {
+  const wert = $('datumWahl').value;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(wert) || wert === state.aktiv.datum) return;
+  merken();
+  state.aktiv.datum = wert;
+  state.aktiv.datumGesetzt = true;
+  sichern();
+  zeichneKopf();
+  melden(`Datum auf ${datumText(wert)} geändert`);
 });
 
 function formularAktualisieren() {
@@ -702,6 +723,7 @@ function zeichneAbende() {
 
 function zeichneKopf() {
   $('datum').textContent = datumText(state.aktiv.datum);
+  $('datumWahl').value = state.aktiv.datum;
   if (document.activeElement !== $('anlass')) $('anlass').value = state.aktiv.name;
   $('zahlRang').textContent = state.aktiv.eintraege.length;
   $('zahlAbende').textContent = state.archiv.length;
