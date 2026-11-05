@@ -1,7 +1,7 @@
 'use strict';
 // Startet sofort aus dem Cache und holt im Hintergrund die neuste Version fuer den naechsten Start.
-const CACHE = 'jass-rechner-v1';
-const DATEIEN = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
+const CACHE = 'jass-rechner-v2';
+const DATEIEN = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png', './icon-maskable-512.png'];
 
 self.addEventListener('install', (ev) => {
   ev.waitUntil(caches.open(CACHE).then((c) => c.addAll(DATEIEN)).then(() => self.skipWaiting()));
