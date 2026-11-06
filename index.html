@@ -136,6 +136,16 @@ ol, ul { margin: 0; padding: 0; list-style: none; }
 .btn.gefahr { color: var(--red); }
 .textbtn { justify-self: center; min-height: 44px; padding: 8px 12px; border: 0; background: none; color: var(--muted); font-size: 14px; text-decoration: underline; }
 
+.textbtn.klein { min-height: 36px; padding: 4px 6px; }
+
+/* Teilnehmerliste */
+.teilnehmer { display: grid; gap: 8px; }
+.teilnehmer-kopf { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { min-height: 40px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 20px; background: var(--surface); font-size: 15px; }
+.chip:active { background: var(--sunken); }
+.chip.an { background: var(--felt); border-color: var(--felt); color: var(--felt-fg); }
+
 .notiz { padding: 10px 12px; border-radius: 6px; background: var(--gold-soft); color: var(--gold-fg); font-size: 14px; }
 .warnung { margin-bottom: 14px; }
 
@@ -245,6 +255,13 @@ dialog .fehler { color: var(--red); font-weight: 600; }
       <input id="anlass" type="text" maxlength="60" placeholder="Jassabend" aria-label="Name des Anlasses" autocomplete="off">
     </div>
     <div id="editHinweis" class="notiz" hidden></div>
+    <div id="teilnehmerBox" class="teilnehmer" hidden>
+      <div class="teilnehmer-kopf">
+        <span class="label" id="teilnehmerTitel"></span>
+        <button type="button" class="textbtn klein" id="btnTeilnehmerAendern">Liste ändern</button>
+      </div>
+      <div id="teilnehmerChips" class="chips"></div>
+    </div>
     <form class="blatt" id="formular" autocomplete="off">
       <div class="feld">
         <label class="label" for="spielerName">Spielername</label>
@@ -263,6 +280,7 @@ dialog .fehler { color: var(--red); font-weight: 600; }
       <button id="btnReset" class="btn" type="button">Leeren</button>
       <button id="btnSpeichern" class="btn haupt" type="button" disabled>In Rangliste eintragen</button>
     </div>
+    <button type="button" class="textbtn" id="btnTeilnehmer">Teilnehmerliste einfügen</button>
   </section>
 
   <section id="v-rangliste" class="view"></section>
@@ -302,7 +320,8 @@ function gueltigerEintrag(s) {
     s.passen.every((p) => Number.isFinite(p) && p >= 0);
 }
 function gueltigerAbend(a) {
-  return a && typeof a.datum === 'string' && Array.isArray(a.eintraege) && a.eintraege.every(gueltigerEintrag);
+  return a && typeof a.datum === 'string' && Array.isArray(a.eintraege) && a.eintraege.every(gueltigerEintrag) &&
+    (a.teilnehmer === undefined || (Array.isArray(a.teilnehmer) && a.teilnehmer.every((n) => typeof n === 'string')));
 }
 function gueltigeDaten(d) {
   return d && gueltigerAbend(d.aktiv) && Array.isArray(d.archiv) && d.archiv.every(gueltigerAbend);
@@ -458,7 +477,69 @@ function formularAktualisieren() {
 
   state.entwurf = editId ? null : { name: nameEl.value, passen: passeInputs.map((el) => el.value) };
   sichern();
+  zeichneTeilnehmer();
 }
+
+/* ---------- Teilnehmerliste ---------- */
+function teilnehmerLesen(text) {
+  const gesehen = new Set();
+  const namen = [];
+  text.split(/\r?\n/).forEach((zeile) => {
+    // Zeilen aus Excel kommen mit Tabulatoren; führende Nummern wie «12.» fallen weg
+    const name = zeile.replace(/\t+/g, ' ').replace(/^\s*\d+[.)]?\s+/, '').replace(/\s+/g, ' ').trim().slice(0, 40);
+    const k = name.toLowerCase();
+    if (!name || /^\d+$/.test(name) || ['name vorname', 'nr. name vorname', 'name'].includes(k) || gesehen.has(k)) return;
+    gesehen.add(k);
+    namen.push(name);
+  });
+  return namen;
+}
+
+function offeneTeilnehmer() {
+  const erfasst = new Set(state.aktiv.eintraege.map((s) => s.name.trim().toLowerCase()));
+  return (state.aktiv.teilnehmer || []).filter((n) => !erfasst.has(n.toLowerCase()));
+}
+
+function zeichneTeilnehmer() {
+  const liste = state.aktiv.teilnehmer || [];
+  $('btnTeilnehmer').hidden = liste.length > 0;
+  $('teilnehmerBox').hidden = !liste.length;
+  if (!liste.length) return;
+  const offen = offeneTeilnehmer();
+  const aktuell = nameEl.value.trim().toLowerCase();
+  $('teilnehmerTitel').textContent = offen.length ? `Noch offen: ${offen.length} von ${liste.length}` : `Alle ${liste.length} Teilnehmer erfasst`;
+  $('teilnehmerChips').innerHTML = offen.map((n) =>
+    `<button type="button" class="chip${n.toLowerCase() === aktuell ? ' an' : ''}" data-teilnehmer="${e(n)}">${e(n)}</button>`).join('');
+}
+
+function teilnehmerEinfuegen() {
+  dialog({
+    titel: 'Teilnehmerliste',
+    text: 'Einen Namen pro Zeile einfügen, zum Beispiel aus Excel kopiert. Die Liste gilt für den laufenden Abend.',
+    feld: { wert: (state.aktiv.teilnehmer || []).join('\n') },
+    aktionen: [
+      { label: 'Abbrechen' },
+      { label: 'Übernehmen', art: 'haupt', fn: (wert) => {
+        const namen = teilnehmerLesen(wert);
+        merken();
+        state.aktiv.teilnehmer = namen;
+        sichern();
+        allesZeichnen();
+        melden(namen.length ? `${namen.length} Teilnehmer übernommen` : 'Teilnehmerliste geleert');
+      } },
+    ],
+  });
+}
+
+$('btnTeilnehmer').addEventListener('click', teilnehmerEinfuegen);
+$('btnTeilnehmerAendern').addEventListener('click', teilnehmerEinfuegen);
+$('teilnehmerChips').addEventListener('click', (ev) => {
+  const b = ev.target.closest('button[data-teilnehmer]');
+  if (!b) return;
+  nameEl.value = b.dataset.teilnehmer;
+  formularAktualisieren();
+  passeInputs[0].focus();
+});
 
 function formularLeeren() {
   editId = null;
@@ -734,6 +815,7 @@ function zeichneKopf() {
 
 function allesZeichnen() {
   zeichneKopf();
+  zeichneTeilnehmer();
   zeichneRangliste();
   zeichneAbende();
 }
