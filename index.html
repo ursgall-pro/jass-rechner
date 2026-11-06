@@ -519,6 +519,31 @@ function teilnehmerEinfuegen() {
     text: 'Einen Namen pro Zeile einfügen, zum Beispiel aus Excel kopiert. Die Liste gilt für den laufenden Abend.',
     feld: { wert: (state.aktiv.teilnehmer || []).join('\n') },
     aktionen: [
+      { label: 'Aus Datei laden', art: 'breit', fn: () => {
+        const p = $('sheet').querySelector('p');
+        const wahl = document.createElement('input');
+        wahl.type = 'file';
+        wahl.accept = '.txt,.csv,text/plain,text/csv';
+        wahl.hidden = true;
+        $('sheet').appendChild(wahl);
+        wahl.addEventListener('change', () => {
+          const datei = wahl.files && wahl.files[0];
+          wahl.remove();
+          if (!datei) return;
+          const leser = new FileReader();
+          leser.onload = () => {
+            // CSV aus Excel trennt mit Semikolon
+            const text = String(leser.result).replace(/;/g, '\t');
+            $('sheetFeld').value = text;
+            p.textContent = `${teilnehmerLesen(text).length} Namen aus «${datei.name}» geladen. Prüfe sie und tippe auf «Übernehmen».`;
+            p.className = '';
+          };
+          leser.onerror = () => { p.textContent = 'Die Datei liess sich nicht lesen. Wähle eine Textdatei (.txt).'; p.className = 'fehler'; };
+          leser.readAsText(datei);
+        });
+        wahl.click();
+        return false;
+      } },
       { label: 'Aus Zwischenablage einfügen', art: 'breit', fn: () => {
         const p = $('sheet').querySelector('p');
         const fehler = () => {
