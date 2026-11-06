@@ -137,6 +137,7 @@ ol, ul { margin: 0; padding: 0; list-style: none; }
 .textbtn { justify-self: center; min-height: 44px; padding: 8px 12px; border: 0; background: none; color: var(--muted); font-size: 14px; text-decoration: underline; }
 
 .textbtn.klein { min-height: 36px; padding: 4px 6px; }
+.btn.breit { grid-column: 1 / -1; }
 
 /* Teilnehmerliste */
 .teilnehmer { display: grid; gap: 8px; }
@@ -518,6 +519,21 @@ function teilnehmerEinfuegen() {
     text: 'Einen Namen pro Zeile einfügen, zum Beispiel aus Excel kopiert. Die Liste gilt für den laufenden Abend.',
     feld: { wert: (state.aktiv.teilnehmer || []).join('\n') },
     aktionen: [
+      { label: 'Aus Zwischenablage einfügen', art: 'breit', fn: () => {
+        const p = $('sheet').querySelector('p');
+        const fehler = () => {
+          p.textContent = 'Die Zwischenablage ist leer oder gesperrt. Kopiere die Namen nochmals oder füge sie über das Klemmbrett der Tastatur ein.';
+          p.className = 'fehler';
+        };
+        if (!navigator.clipboard || !navigator.clipboard.readText) { fehler(); return false; }
+        navigator.clipboard.readText().then((text) => {
+          if (!text.trim()) { fehler(); return; }
+          $('sheetFeld').value = text;
+          p.textContent = `${teilnehmerLesen(text).length} Namen eingefügt. Prüfe sie und tippe auf «Übernehmen».`;
+          p.className = '';
+        }).catch(fehler);
+        return false;
+      } },
       { label: 'Abbrechen' },
       { label: 'Übernehmen', art: 'haupt', fn: (wert) => {
         const namen = teilnehmerLesen(wert);
